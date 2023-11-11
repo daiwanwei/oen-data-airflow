@@ -1,9 +1,9 @@
 
 x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${TAG:-latest-dev}
 x-superset-depends-on: &superset-depends-on
-  - db
-  - redis
-  - data_db
+  - superset_db
+  - superset_cache
+  - airflow_data_db
 x-superset-volumes:
   &superset-volumes # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
   - ./docker/superset:/app/docker
@@ -14,7 +14,7 @@ x-superset-volumes:
 version: "3.8"
 
 services:
-  data_db:
+  airflow_data_db:
     image: postgres:16
     environment:
       POSTGRES_USER: open_user
@@ -33,7 +33,7 @@ services:
     ports: # only for local environments
       - "9500:9500"
     depends_on:
-      - data_db
+      - airflow_data_db
     env_file: docker/.env
     volumes:
       - airflow_db:/home/airflow_db
@@ -43,22 +43,24 @@ services:
       - ./docker/variables.json:/root/airflow/variables.json
       - ./docker/webserver_config_local.py:/root/airflow/webserver_config.py:ro
 
-  redis:
+  superset_cache:
     image: redis:7
     container_name: superset_cache
     restart: unless-stopped
     volumes:
       - redis:/data
 
-  db:
+  superset_db:
     env_file: docker/superset/.env-non-dev
     image: postgres:15
     container_name: superset_db
     restart: unless-stopped
+    ports:
+      - "5431:5432"
     volumes:
       - db_home:/var/lib/postgresql/data
       - ./docker/superset/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-  superset:
+  superset_app:
     env_file: docker/superset/.env-non-dev
     image: *superset-image
     container_name: superset_app
