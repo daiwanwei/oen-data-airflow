@@ -1,0 +1,122 @@
+
+x-superset-image: &superset-image apachesuperset.docker.scarf.sh/apache/superset:${TAG:-latest-dev}
+x-superset-depends-on: &superset-depends-on
+  - db
+  - redis
+  - data_db
+x-superset-volumes:
+  &superset-volumes # /app/pythonpath_docker will be appended to the PYTHONPATH in the final container
+  - ./docker/superset:/app/docker
+  - superset_home:/app/superset_home
+
+
+
+version: "3.8"
+
+services:
+  data_db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: open_user
+      POSTGRES_PASSWORD: open_password
+      POSTGRES_DB: open_data
+    volumes:
+      - ./postgresql_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    restart: always
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["standalone"]
+    ports: # only for local environments
+      - "9500:9500"
+    depends_on:
+      - data_db
+    env_file: docker/.env
+    volumes:
+      - airflow_db:/home/airflow_db
+      - ./tmp_files:/tmp_files
+      - ./airflow_logs:/root/airflow/logs
+      - ./dags:/root/airflow/dags
+      - ./docker/variables.json:/root/airflow/variables.json
+      - ./docker/webserver_config_local.py:/root/airflow/webserver_config.py:ro
+
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+
+  db:
+    env_file: docker/superset/.env-non-dev
+    image: postgres:15
+    container_name: superset_db
+    restart: unless-stopped
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./docker/superset/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+  superset:
+    env_file: docker/superset/.env-non-dev
+    image: *superset-image
+    container_name: superset_app
+    command: [ "/app/docker/docker-bootstrap.sh", "app-gunicorn" ]
+    user: "root"
+    restart: unless-stopped
+    ports:
+      - 8088:8088
+    depends_on: *superset-depends-on
+    volumes: *superset-volumes
+
+  superset-init:
+    image: *superset-image
+    container_name: superset_init
+    command: [ "/app/docker/docker-init.sh" ]
+    env_file: docker/superset/.env-non-dev
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      disable: true
+
+  superset-worker:
+    image: *superset-image
+    container_name: superset_worker
+    command: [ "/app/docker/docker-bootstrap.sh", "worker" ]
+    env_file: docker/superset/.env-non-dev
+    restart: unless-stopped
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
+        ]
+
+  superset-worker-beat:
+    image: *superset-image
+    container_name: superset_worker_beat
+    command: [ "/app/docker/docker-bootstrap.sh", "beat" ]
+    env_file: docker/superset/.env-non-dev
+    restart: unless-stopped
+    depends_on: *superset-depends-on
+    user: "root"
+    volumes: *superset-volumes
+    healthcheck:
+      disable: true
+
+volumes:
+  # Used to share logs between scheduler and webserver so they actually show
+  # up in the UI:
+  airflow_logs:
+  airflow_db:
+  superset_home:
+    external: false
+  db_home:
+    external: false
+  redis:
+    external: false

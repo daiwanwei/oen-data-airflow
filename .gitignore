@@ -1,0 +1,5 @@
+/airflow_logs/
+/tmp_files/
+/postgresql_data/
+/docker/variables.json
+/docker/.env

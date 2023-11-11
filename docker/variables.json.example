@@ -1,0 +1,3 @@
+{
+    "postgresql_dsn": "postgres://user:password@host:port/db_name"
+}

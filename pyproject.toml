@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "open-data-airflow"
+version = "0.1.0"
+description = ""
+authors = ["Wade <wade@teahouse.finance>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<=3.11"
+apache-airflow = "2.7.1"
+werkzeug = "2.3.7"
+connexion = "2.14.1"
+requests = "^2.31.0"
+psycopg2 = "^2.9.9"
+pandas = "^2.1.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
